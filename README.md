@@ -1,6 +1,6 @@
 # Vision Transformer for AI-Generated Face Detection
 
-**Student**: Hanson Wu  
+**Students**: Hanson Wu, Rayan Hassan
 **Course**: CS 7150 - Deep Learning  
 **Project**: Interpreting AI-Generated Face Detection Models
 
@@ -21,40 +21,38 @@ We use PyTorch for both models. For the CNN, we use ResNet-18, a standard residu
 
 ```
 final_project/
-├── vision_transformer_face_detection.ipynb  # Main notebook for ViT (ENTRY POINT)
-├── ResNet.ipynb                             # Main notebook for ResNet (ENTRY POINT)
-├── data_utils.py                            # Data loading & preprocessing
-├── resnet_helpers
-    ├── resnet_model.py                      # ResNet model & training logic
-    ├── resnet_utils.py
-    ├── resnet_gradcam.py                    # Grad-CAM visualization for ResNet
-├── vit_helpers
-    ├── vit_model.py                         # ViT model & training logic
-    ├── vit_gradcam.py                       # Grad-CAM visualization for ViT
-├── resnet_model_outputs                     # ResNet model visualizations & metrics
-├── resnet_gradcam_outputs                   # ResNet Grad-CAM visualizations & metrics
-├── vit_model_outputs                        # ViT model visualizations & metrics
-├── vit_gradcam_outputs                      # ViT Grad-CAM visualizations & metrics
-├── requirements.txt                         # Python dependencies
-├── README.md                                # This file
-└── data/                                    # Face dataset
+├── vision_transformer_face_detection.ipynb   # Main notebook for ViT (ENTRY POINT)
+├── ResNet.ipynb                              # Main notebook for ResNet (ENTRY POINT)
+├── data_utils.py                             # Data loading & preprocessing
+├── resnet_helpers/
+│   ├── resnet_model.py                       # ResNet model & training logic
+│   └── resnet_gradcam.py                     # Grad-CAM visualization for ResNet
+├── vit_helpers/
+│   ├── vit_model.py                          # ViT model & training logic
+│   └── vit_gradcam.py                        # Grad-CAM visualization for ViT
+├── resnet_model_outputs/                     # ResNet model visualizations & metrics
+├── resnet_gradcam_outputs/                   # ResNet Grad-CAM visualizations & metrics
+├── vit_model_outputs/                        # ViT model visualizations & metrics
+├── vit_gradcam_outputs/                      # ViT Grad-CAM visualizations & metrics
+├── requirements.txt                          # Python dependencies
+├── README.md                                 # This file
+└── data/                                     # Face dataset
     ├── dataset/
     │   ├── train/
-    |   |   ├── 0
-    |   |   ├── 1
-    │   └── test/
-    |   |   ├── 0
-    |   |   ├── 1
-    |   ├── validate/
-    |   |   ├── 0
-    |   |   ├── 1
-    ├── source/
+    │   │   ├── 0/
+    │   │   └── 1/
+    │   ├── test/
+    │   │   ├── 0/
+    │   │   └── 1/
+    │   └── validate/
+    │       ├── 0/
+    │       └── 1/
+    └── source/
         ├── real/
-        ├── fake/
-            ├── GAN
-            ├── Diffusion
-            ├── FaceSwap
-
+        └── fake/
+            ├── GAN/
+            ├── Diffusion/
+            └── FaceSwap/
 ```
 
 ## Dataset Structure and Reorganization
@@ -103,6 +101,14 @@ We transformed the dataset into the following structure:
 
 ---
 
+### Motivation
+
+This reorganization allows us to clearly separate:
+- real vs synthetic data, and  
+- different types of synthetic generation methods.
+
+This is particularly important for our analysis using Grad-CAM, as it enables us to compare how models focus on different facial regions depending on whether the image is GAN-generated, diffusion-generated, or manipulated.
+
 ## Getting Started
 
 ### 1. Install Dependencies
@@ -116,22 +122,8 @@ pip install -r requirements.txt
 ### 2. Prepare Dataset
 
 Download one of these datasets from Kaggle:
-- **Real vs AI-Generated Faces Dataset** (~7K images): https://www.kaggle.com/datasets/philosopher0808/real-vs-ai-generated-faces-dataset
-- **140K Real and Fake Faces** (~140K images): https://www.kaggle.com/datasets/xhlulu/140k-real-and-fake-faces
+- **Real vs AI-Generated Faces Dataset** (~120K images): https://www.kaggle.com/datasets/philosopher0808/real-vs-ai-generated-faces-dataset
 
-Extract into `./data/` directory with structure:
-```
-data/
-  train/
-    real/      (images)
-    fake/      (images)
-  val/
-    real/      (images)
-    fake/      (images)
-  test/
-    real/      (images)
-    fake/      (images)
-```
 
 If you only have one split, the code will handle it gracefully.
 
@@ -146,7 +138,7 @@ Execute cells in order:
 1. **Import Libraries** - Load dependencies
 2. **Load Dataset** - Verify data is present
 3. **Build Model** - Initialize ViT
-4. **Train** - Run training loop (30-50 epochs)
+4. **Train** - Run training loop (20 epochs)
 5. **Evaluate** - Compute metrics on test set
 6. **Grad-CAM** - Generate attention visualizations
 7. **Analyze** - Compare patterns between real/fake
