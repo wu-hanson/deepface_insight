@@ -372,7 +372,6 @@ def compute_attention_rollout_for_paths(
 
     return rollout_maps, images_vis
 
-
 def compute_and_visualize_rollout_comparison(
     image_paths,
     rollout,
@@ -438,8 +437,13 @@ def compute_and_visualize_rollout_comparison(
         (avg_method_img * 255).astype(np.uint8), avg_method_rollout_normalized
     )
 
-    # Compute difference
+    # Compute signed difference (method - real), aligned with ResNet comparison pattern
     diff_rollout_map = avg_method_rollout_normalized - avg_real_rollout_normalized
+    diff_rollout_smooth = cv2.resize(
+        diff_rollout_map,
+        (IMAGE_SIZE, IMAGE_SIZE),
+        interpolation=cv2.INTER_CUBIC,
+    )
 
     # Print statistics
     print(
@@ -453,33 +457,26 @@ def compute_and_visualize_rollout_comparison(
     fig, axes = plt.subplots(1, 3, figsize=(15, 4))
 
     axes[0].imshow(real_rollout_overlay)
-    axes[0].set_title("Average Attention Rollout\n(Real Faces)", fontsize=12)
+    axes[0].set_title("Average Attention Rollout\nReal Faces", fontsize=12)
     axes[0].axis("off")
 
     axes[1].imshow(method_rollout_overlay)
-    axes[1].set_title(f"Average Attention Rollout\n({method_name} Faces)", fontsize=12)
+    axes[1].set_title(f"Average Attention Rollout\n{method_name} Faces", fontsize=12)
     axes[1].axis("off")
 
-    # Create difference visualization with average face visible underneath
-    # Normalize difference map to 0-1 for visualization
-    diff_normalized = (diff_rollout_map - diff_rollout_map.min()) / (
-        diff_rollout_map.max() - diff_rollout_map.min() + 1e-10
+    max_abs = np.max(np.abs(diff_rollout_map)) + 1e-10
+    im = axes[2].imshow(
+        diff_rollout_smooth,
+        cmap="RdBu_r",
+        vmin=-max_abs,
+        vmax=max_abs,
     )
-    # Average the real image for background
-    avg_real_img_uint8 = (
-        np.mean([np.clip(img, 0, 1) for img in [avg_method_img]], axis=0) * 255
-    ).astype(np.uint8)
-    # Blend difference map on top of average real image
-    difference_overlay = AttentionVisualization.create_heatmap(
-        avg_real_img_uint8, diff_normalized, alpha=alpha_difference
-    )
-    axes[2].imshow(difference_overlay)
-
-    axes[2].set_title(f"Attention Difference\n({method_name} minus Real)", fontsize=12)
+    axes[2].set_title(f"Attention Difference\n{method_name} - Real", fontsize=12)
     axes[2].axis("off")
+    plt.colorbar(im, ax=axes[2], label="Δ Attention Rollout")
 
     plt.suptitle(
-        f"ViT Attention Rollout Comparison: Real vs {method_name}",
+        f"ViT Attention Rollout Pattern Comparison: Real vs {method_name}",
         fontsize=14,
         fontweight="bold",
     )

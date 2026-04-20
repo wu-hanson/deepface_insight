@@ -161,7 +161,9 @@ class AttentionVisualization:
         image: np.ndarray,
         cam: np.ndarray,
         alpha: float = 0.4,
-        colormap: int = cv2.COLORMAP_JET,
+        colormap: int = cv2.COLORMAP_TURBO,
+        clip_percentile: Tuple[float, float] = (2.0, 98.0),
+        gamma: float = 0.9,
     ) -> np.ndarray:
         """
         Overlay CAM heatmap on image.
@@ -171,12 +173,23 @@ class AttentionVisualization:
             cam: CAM heatmap (H, W), values in [0, 1]
             alpha: Blending factor
             colormap: OpenCV colormap
+            clip_percentile: Lower/upper percentiles used to stretch CAM contrast.
+            gamma: Gamma adjustment for CAM contrast (<1 brightens, >1 darkens).
 
         Returns:
             Overlay image (H, W, 3)
         """
+        # Robustly normalize CAM before applying color so maps do not saturate into red.
+        cam_vis = np.asarray(cam, dtype=np.float32)
+        p_low, p_high = clip_percentile
+        lo, hi = np.percentile(cam_vis, [p_low, p_high])
+        if hi > lo:
+            cam_vis = (cam_vis - lo) / (hi - lo)
+        cam_vis = np.clip(cam_vis, 0.0, 1.0)
+        cam_vis = np.power(cam_vis, gamma)
+
         # Normalize CAM to 0-255
-        cam_scaled = (cam * 255).astype(np.uint8)
+        cam_scaled = (cam_vis * 255).astype(np.uint8)
 
         # Apply colormap
         heatmap = cv2.applyColorMap(cam_scaled, colormap)
@@ -365,32 +378,34 @@ def visualize_attention_comparison(
     axes = fig_ax
 
     diff_cam = source_cam - real_cam
-    diff_cam_resized = cv2.resize(diff_cam, (image_size, image_size), interpolation=cv2.INTER_CUBIC)
-    vmax = np.max(np.abs(diff_cam_resized))
+    diff_cam_resized = cv2.resize(
+        diff_cam, (image_size, image_size), interpolation=cv2.INTER_CUBIC
+    )
+    vmax = np.max(np.abs(diff_cam)) + 1e-10
 
-    # Real faces — overlay if provided, else raw CAM
+    # Real panel (prefer overlay, fallback to raw CAM)
     if real_overlay is not None:
-        axes[0].imshow(cv2.cvtColor(real_overlay, cv2.COLOR_BGR2RGB))
+        axes[0].imshow(real_overlay)
     else:
         im0 = axes[0].imshow(real_cam, cmap="hot")
         plt.colorbar(im0, ax=axes[0], fraction=0.046, pad=0.04)
-    axes[0].set_title("Real Faces", fontsize=12, fontweight="bold")
+    axes[0].set_title("Average Grad-CAM\nReal Faces", fontsize=12)
     axes[0].axis("off")
 
-    # Source faces — overlay if provided, else raw CAM
+    # Source panel (prefer overlay, fallback to raw CAM)
     if source_overlay is not None:
-        axes[1].imshow(cv2.cvtColor(source_overlay, cv2.COLOR_BGR2RGB))
+        axes[1].imshow(source_overlay)
     else:
         im1 = axes[1].imshow(source_cam, cmap="hot")
         plt.colorbar(im1, ax=axes[1], fraction=0.046, pad=0.04)
-    axes[1].set_title(f"{source_name} Faces", fontsize=12, fontweight="bold")
+    axes[1].set_title(f"Average Grad-CAM\n{source_name} Faces", fontsize=12)
     axes[1].axis("off")
 
-    # Difference map (always CAM-based)
+    # Difference panel (ResNet-style signed map)
     im2 = axes[2].imshow(diff_cam_resized, cmap="RdBu_r", vmin=-vmax, vmax=vmax)
-    axes[2].set_title(f"Δ Attention ({source_name} - Real)", fontsize=12, fontweight="bold")
+    axes[2].set_title(f"Grad-CAM Difference\n{source_name} - Real", fontsize=12)
     axes[2].axis("off")
-    plt.colorbar(im2, ax=axes[2], fraction=0.046, pad=0.04, label="Δ Attention")
+    plt.colorbar(im2, ax=axes[2], fraction=0.046, pad=0.04, label="Δ Grad-CAM")
 
 
 def analyze_gradcam_by_source(
@@ -403,11 +418,11 @@ def analyze_gradcam_by_source(
     inv_normalize,
     device,
     image_size=224,
-    max_samples=None
+    max_samples=None,
 ):
     """
     Consolidated helper function for Grad-CAM analysis across different sources.
-    
+
     Args:
         source_paths: List of image paths for the source (e.g., GAN, Diffusion)
         source_name: Name of the source (e.g., "GAN", "Diffusion")
@@ -422,37 +437,39 @@ def analyze_gradcam_by_source(
     """
     if max_samples is None:
         max_samples = MAX_SAMPLES_FOR_ANALYSIS
-    
-    print(f"\n" + "="*70)
+
+    print(f"\n" + "=" * 70)
     print(f"ANALYZING REAL vs {source_name.upper()}")
-    print("="*70 + "\n")
-    
+    print("=" * 70 + "\n")
+
     # Sample images
     num_samples = min(max_samples, len(source_paths))
     fake_sample = random.sample(source_paths, num_samples)
-    
+
     fake_cams = []
     fake_imgs = []
-    
+
     print(f"Processing {num_samples} {source_name} images...")
-    
+
     # Compute attention maps
     for i, img_path in enumerate(fake_sample):
         if (i + 1) % 500 == 0:
             print(f"  {i+1}/{num_samples}")
-        
+
         try:
             img = Image.open(img_path).convert("RGB")
-            img_tensor = get_data_transforms(image_size=image_size)['val'](img).unsqueeze(0).to(device)
-            
+            img_tensor = (
+                get_data_transforms(image_size=image_size)["val"](img).unsqueeze(0).to(device)
+            )
+
             with torch.no_grad():
                 vit_model.eval()
                 outputs = vit_model(img_tensor)
                 pred_class = outputs.argmax(dim=1).item()
-            
+
             cam = grad_cam.generate_cam(img_tensor, target_class=pred_class, patch_size=16)
             fake_cams.append(cam)
-            
+
             # Store normalized image
             img_vis = inv_normalize(img_tensor[0].cpu()).detach().numpy().transpose(1, 2, 0)
             img_vis = np.clip(img_vis, 0, 1)
@@ -460,34 +477,49 @@ def analyze_gradcam_by_source(
         except Exception as e:
             logger.warning(f"Error processing {img_path}: {e}")
             continue
-    
+
     if not fake_cams:
-        print(f"✗ Failed to compute {source_name} attention maps")
+        print(f"Failed to compute {source_name} attention maps")
         return None, None, None
-    
+
     # Compute averages
     avg_fake_cam = np.mean(fake_cams, axis=0)
     avg_fake_img = np.mean(fake_imgs, axis=0)
-    fake_overlay = AttentionVisualization.create_heatmap((avg_fake_img * 255).astype(np.uint8), avg_fake_cam)
-    
+    fake_overlay = AttentionVisualization.create_heatmap(
+        (avg_fake_img * 255).astype(np.uint8), avg_fake_cam
+    )
+
     # Compute statistics
     print(f"\nStatistics:")
     stats = print_attention_comparison_stats(real_cam, avg_fake_cam, "Real", source_name)
-    
+
     # Visualize comparison
     fig, axes = plt.subplots(1, 3, figsize=(15, 4))
-    visualize_attention_comparison(axes, real_cam, avg_fake_cam, source_name, image_size)
-    
-    plt.suptitle(f"ViT Grad-CAM Comparison: Real vs {source_name}", fontsize=14, fontweight='bold')
+    visualize_attention_comparison(
+        axes,
+        real_cam,
+        avg_fake_cam,
+        source_name,
+        image_size=image_size,
+        real_overlay=real_overlay,
+        source_overlay=fake_overlay,
+    )
+
+    plt.suptitle(
+        f"ViT Grad-CAM Pattern Comparison: Real vs {source_name}",
+        fontsize=14,
+        fontweight="bold",
+    )
     plt.tight_layout()
-    save_path = f'./vit_results/gradcam_comparison_real_vs_{source_name.lower()}.png'
-    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    save_path = f"./vit_model_outputs/gradcam_comparison_real_vs_{source_name.lower()}.png"
+    plt.savefig(save_path, dpi=150, bbox_inches="tight")
     plt.show()
-    
-    print(f"✓ Saved to {save_path}\n")
-    
+
+    print(f"Saved to {save_path}\n")
+
     return avg_fake_cam, fake_overlay, stats
-    
+
+
 def print_attention_comparison_stats(
     real_cam: np.ndarray,
     source_cam: np.ndarray,
