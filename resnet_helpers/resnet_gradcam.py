@@ -70,15 +70,22 @@ class ResNetGradCAM:
 class GradCAMVisualization:
     @staticmethod
     def create_heatmap(image: np.ndarray, cam: np.ndarray, alpha: float = 0.4) -> np.ndarray:
-        """
-        image: original image as uint8 RGB, shape (H, W, 3)
-        cam: heatmap in [0,1], shape (H, W)
-        """
+
         h, w = image.shape[:2]
         cam_resized = cv2.resize(cam, (w, h))
 
-        heatmap = (cam_resized * 255).astype(np.uint8)
-        heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+        cam_vis = np.asarray(cam_resized, dtype=np.float32)
+
+        p_low, p_high = np.percentile(cam_vis, [2, 98])
+        if p_high > p_low:
+            cam_vis = (cam_vis - p_low) / (p_high - p_low)
+
+        cam_vis = np.clip(cam_vis, 0.0, 1.0)
+
+        cam_vis = np.power(cam_vis, 0.9)  # gamma
+
+        heatmap = (cam_vis * 255).astype(np.uint8)
+        heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_TURBO)
         heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
 
         overlay = cv2.addWeighted(image, 1 - alpha, heatmap, alpha, 0)
@@ -158,6 +165,7 @@ def compute_average_cams(
     return avg_cam, avg_img
 
 
+    
 def compare_gradcam_patterns(
     real_sample,
     fake_sample,
@@ -189,9 +197,13 @@ def compare_gradcam_patterns(
             fake_sample, model, grad_cam, eval_transform, inv_normalize, device
         )
 
+
+
+
         real_overlay = GradCAMVisualization.create_heatmap(
             (avg_real_img * 255).astype(np.uint8), avg_real_cam
         )
+
         fake_overlay = GradCAMVisualization.create_heatmap(
             (avg_fake_img * 255).astype(np.uint8), avg_fake_cam
         )
@@ -208,6 +220,10 @@ def compare_gradcam_patterns(
         )
         print(
             f"{layer_name} | {fake_name} mean: {avg_fake_cam.mean():.4f}, std: {avg_fake_cam.std():.4f}"
+        )
+
+        print(
+            f"Mean Difference:{(avg_fake_cam.mean() - avg_real_cam.mean()):.4f}"
         )
 
         fig, axes = plt.subplots(1, 3, figsize=(15, 4))

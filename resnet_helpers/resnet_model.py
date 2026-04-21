@@ -4,7 +4,6 @@ from torchvision.models import resnet18, ResNet18_Weights
 import time
 from sklearn.metrics import accuracy_score
 
-
 def get_resnet_model(num_classes: int = 2, pretrained: bool = True):
     weights = ResNet18_Weights.DEFAULT if pretrained else None
     model = resnet18(weights=weights)
@@ -23,6 +22,7 @@ def load_resnet_model(path: str, device: torch.device, num_classes: int = 2):
     model.to(device)
     model.eval()
     return model
+
 
 
 def train_one_epoch(model, loader, criterion, optimizer, device):
