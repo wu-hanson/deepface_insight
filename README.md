@@ -11,7 +11,7 @@ In this project, we compare two deep learning approaches for classifying face im
 - ResNet: a convolutional neural network (CNN)
 - ViT (Vision Transformer): a transformer-based image model
 
-The goal is not only to compare which model performs better, but also to understand how they make their decisions. To do that, we use Grad-CAM visualizations to inspect which parts of the face image each model focuses on when making a prediction. Grad-CAM is a gradient-based localization method that highlights the image regions most relevant to the predicted class.
+The goal is not only to compare which model performs better, but also to understand how they make their decisions. To do that, we use Grad-CAM and attention rollout visualizations to inspect which parts of the face image each model focuses on when making a prediction. Grad-CAM is a gradient-based localization method that highlights the image regions most relevant to the predicted class. To take it one step further, we compare the results by categories of the AI-generated images.
 
 We use PyTorch for both models. For the CNN, we use ResNet-18, a standard residual network available in TorchVision. For the transformer model, we use ViT-B/16, which is also provided in TorchVision.
 
