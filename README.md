@@ -1,6 +1,6 @@
 # Vision Transformer for AI-Generated Face Detection
 
-**Students**: Hanson Wu, Rayan Hassan
+**Students**: Hanson Wu, Rayan Hassan 
 **Course**: CS 7150 - Deep Learning  
 **Project**: Interpreting AI-Generated Face Detection Models
 
